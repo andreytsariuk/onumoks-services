@@ -1,0 +1,28 @@
+{
+  "name": "onumoks-services",
+  "version": "1.0.0",
+  "description": "",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andreytsariuk/onumoks-services.git"
+  },
+  "author": "tsariukandreyjs@gmail.com",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/andreytsariuk/onumoks-services/issues"
+  },
+  "homepage": "https://github.com/andreytsariuk/onumoks-services#readme",
+  "dependencies": {
+    "bookshelf": "^0.10.3",
+    "bookshelf-soft-delete": "^4.0.0",
+    "config": "^1.26.1",
+    "keyword-extractor": "0.0.15",
+    "knex": "^0.13.0",
+    "pg": "^6.4.0",
+    "wordpos": "^1.1.6"
+  }
+}
