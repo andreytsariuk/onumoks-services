@@ -23,6 +23,7 @@
     "keyword-extractor": "0.0.15",
     "knex": "^0.13.0",
     "pg": "^6.4.0",
+    "uwords": "0.0.5",
     "wordpos": "^1.1.6"
   }
 }
