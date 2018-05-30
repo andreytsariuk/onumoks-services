@@ -1,5 +1,12 @@
 const _ = require('lodash');
 var uwords = require('uwords');
+var keyword_extractor = require("keyword-extractor");
+var WordPOS = require('wordpos');
+var wordpos = new WordPOS();
+
+const { unNouns } = require('../src/unKeyWords.json')
+
+
 function findWords2(text) {
   text += " ";
 
@@ -51,87 +58,60 @@ function chastrechiRUS(words) {
     alliance: ['более', 'менее', 'очень', 'крайне', 'скоре', 'некотор', 'кажд', 'други', 'котор', 'когд', 'однак',
       'если', 'чтоб', 'хот', 'смотря', 'как', 'также', 'так', 'зато', 'что', 'или', 'потом', 'эт', 'тог', 'тоже', 'словно',
       'ежели', 'кабы', 'коли', 'ничем', 'чем'],
-    preposition: ['в', 'на', 'по', 'из']
+    preposition: ['в', 'на', 'по', 'из'],
+
   }
   let res = [];
 
-
   _.forEach(words, (word, word_index) => {
-    const wordLenght = word.length;
-    let groupIndex = 0;
-    _.forIn(groups, (group, groupName) => {
-      _.forEach(group, part => {
-        const partLength = part.length;
-        res[word_index] = res[word_index] ? res[word_index] : [];
-        if (
-          word.substring(wordLenght - partLength, wordLenght) == part  //любая часть речи, окончания
-          || word.indexOf(part) >= (Math.round(2 * wordLenght) / 5) && groupIndex == 2 //причастие, от 40% и правее от длины слова
-          || word.substring(0, partLength) == part && res[word_index][groupIndex] < partLength && groupIndex == 7 //союз, сначала слОва
-          || word == part //полное совпадение
-        ) {
-          if (word != part) res[word_index][groupIndex] = partLength; else res[word_index][groupIndex] = 99;
-        }
-        else {
-          console.log('FOOO', word.substring(wordLenght - partLength, wordLenght))
-        }
-      });
-      if (!(res[word_index][groupIndex])) res[word_index][groupIndex] = 0;
-      groupIndex++;
-    });
-  });
+    let isNoun = false;
+
+    _.forEach(groups.noun, (part, part_index) => {
+      if ((
+        word.substring(word.length - part.length, word.length) == part &&
+        word.length > 2 &&
+        part !== word &&
+        groups.alliance.indexOf(word) === -1 &&
+        groups.preposition.indexOf(word) === -1 &&
+        groups.numeral.indexOf(word) === -1 &&
+        unNouns.indexOf(word) === -1
+      ) || /^[A-Za-z0-9]*$/.test(word)) {
+        isNoun = true;
+      }
+    })
+    if (isNoun) {
+      console.log('May noun', word)
+    }
+  })
 
 
   let result = [];
   _.forEach(res, r => {
-    let sorted = _.reverse(r);
+    let sorted = _.sort(r);
     result.push()
-  }) {
-    arsort($r);
-    array_push($result, key($r));
-  }
-  return $result;
+  });
+
+  console.log('Results', res);
 }
 
-console.log('Results', res);
+function FindWords(sentence) {
+  return keyword_extractor.extract(sentence, {
+    language: "russian",
+    remove_digits: true,
+    return_changed_case: true,
+    remove_duplicates: true
+  });
+};
 
-
-  // $res = array();
-  // $string = mb_strtolower($string);
-  // $words = explode(' ', $string);
-  // //print_r($words);
-  // foreach($words as $wk=> $w){
-  //   $len_w = mb_strlen($w);
-  //   foreach($groups as $gk=> $g){
-  //     foreach($g as $part){
-  //       $len_part = mb_strlen($part);
-  //       if (
-  //         mb_substr($w, -$len_part) == $part && $res[$wk][$gk] < $len_part //любая часть речи, окончания
-  //         || mb_strpos($w, $part) >= (round(2 * $len_w) / 5) && $gk == 2 //причастие, от 40% и правее от длины слова
-  //         || mb_substr($w, 0, $len_part) == $part && $res[$wk][$gk] < $len_part && $gk == 7 //союз, сначала слОва
-  //         || $w == $part //полное совпадение
-  //       ) {
-  //         //echo $w.':'.$part."(".$gk.")<br>";
-  //         if ($w != $part) $res[$wk][$gk] = mb_strlen($part); else $res[$wk][$gk] = 99;
-  //       }
-
-  //     }
-  //   }
-  //   if (!isset($res[$wk][$gk])) $res[$wk][$gk] = 0;
-  //   //echo "<hr>";
-  // }
-
-
-  // $result = array();
-  // foreach($res as $r) {
-  //   arsort($r);
-  //   array_push($result, key($r));
-  // }
-  // return $result;
-}
+const text = 'AngularJS. Закон экспоненциального роста объёма знаний Дерека Прайса «Историками науки уже отмечалось, что наука стала развиваться в международном масштабе только после появления и распространения книгопечатания в XV-  XVI веках. Это легко объясняется тем, что основным фактором, определяющим слаженную коллективную работу учёных, является организация передачи информации. Чем эффективнее она осуществляется, тем в более широком масштабе и интенсивнее развивается наука. До сих пор наиболее эффективным методом научной информации является её передача через периодически печатающиеся журналы, поскольку таким путем можно наиболее широко и скоро сообщать о научных достижениях заинтересованным в них учёным. Первый в мире научный журнал появился в 1665 г., но их число стало непрерывно расти только с 1750 г., когда в Европе установилась регулярная почтовая связь. […] кривая роста общего числа научных журналов, издаваемых во всех странах. Число научных журналов дано в логарифмическом масштабе; видно, что за последние триста лет их рост неизменно следует экспоненциальному закону. Каждые 10-15 лет число журналов удваивается и сейчас достигло внушительной цифры в 200 000. На рисунке также нанесено число издаваемых реферативных журналов, которые возникли, чтобы облегчить знакомство с большим количеством научной информации. Они появились уже в 1830 г., и, как видно из рисунка, число их растет параллельно основной кривой и поэтому следует тому же экспоненциальному закону, что и рост числа основных журналов. Реферативных журналов сейчас около 300. Широко публикуемые сейчас статистические данные показывают, что число научных работников и отпускаемые на научную работу средства тоже растут по тому же экспоненциальному закону, удваиваясь через каждые 10-15 лет. Таким образом, видно, что существует тесная связь между ростом числа научных журналов и масштабами развития научной работы. Это указывает на возможность, изучая численность и характер научных журналов, получить полезные сведения по организации научной работы. […] наука развивалась все эти 300 лет равномерно и скачка, которого можно было бы ожидать и который  бы соответствовал происходящей  в  наше время научно-технической революции, не обнаруживается. Современное интенсивное развитие науки объясняется только тем, что, как известно, всякий процесс, который следует экспоненциальному закону, в конечном итоге всегда приобретает характер взрыва». Капица П.Л., Эксперимент. Теория. Практика, М., «Наука», 1987 г., с.196-197. '
 
 
 
 
-let words = uwords('Если мы посмотрим на новые обновления, мы увидим насколько важен данный код для AngularJS.');
+
+let words = uwords(_.toLower(text));
 console.log('words', words);
-chastrechiRUS(words);
+let fo = FindWords(words.join(' '));
+console.log('fo', fo);
+// let fo2 = chastrechiRUS(words);
+// console.log('fo2', fo2)
