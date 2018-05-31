@@ -28,11 +28,26 @@ function Clustering() {
 
   let new_clusters = [];
 
-  _.forEach(documents.models, document => {
+  let centroids = [];
 
+  await Promise
+    .map(documents.models, document1 => {
+      let minIntersection;
+      return Promise
+        .map(documents.models, document2 => {
+          let [keywords1, keywords2] = Promise.all([
+            parseRemoteFile(document1, keywords),
+            parseRemoteFile(document2, keywords)
+          ]);
+          let intersection = keywords1.length > keywords2.length ?
+            100 - _.difference(keywords2, keywords1).length / keywords1.length * 100 :
+            100 - _.difference(keywords1, keywords2).length / keywords2.length * 100;
 
+          if (minIntersection && minIntersection > intersection)
+            minIntersection = intersection;
 
-  });
+        });
+    })
 
 
 
@@ -45,7 +60,7 @@ function Clustering() {
 
 
 
-async function parseRemoteFile(keywords) {
+async function parseRemoteFile(document, keywords) {
   const fileDestination = document.related('file').get('name');
   const file = fs.createWriteStream(fileDestination);
 
@@ -73,6 +88,7 @@ async function parseRemoteFile(keywords) {
   let foundKeywords = getKeyWords(fileText);
 
   let outerKeyWords = [];
+  //Check KeyWords
 
   await Promise.map(foundKeywords, keyword => {
     let foundKeyWord = keywords.find(word => word.get('name') === keyword);
@@ -89,10 +105,6 @@ async function parseRemoteFile(keywords) {
       })
         .save()
         .then(newKeyWord => outerKeyWords.push(foundKeyWord));
-
-    return outerKeyWords;
   });
-
-
-  //Check KeyWords
+  return outerKeyWords;
 }
