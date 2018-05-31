@@ -1,4 +1,7 @@
+let Clustering = require('./clustering');
+
 module.exports = {
+    ...Clustering,
     Users: require('./Users.model'),
     Roles: require('./Roles.model'),
     RolesTypes: require('./rolesTypes'),
@@ -15,5 +18,7 @@ module.exports = {
     Subjects: require('./Subjects.model'),
     LessonTypes: require('./LessonTypes.model'),
     Threads: require('./Threads.model'),
-    Groups: require('./Groups.model')
+    Groups: require('./Groups.model'),
+    Load: require('./Load.model'),
+    LoadItems: require('./LoadItems.model')
 }

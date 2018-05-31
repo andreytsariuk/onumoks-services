@@ -11,7 +11,7 @@ module.exports = Bookshelf.model('Documents', Bookshelf.Model.extend({
     profile() {
         return this.belongsTo('Profiles');
     },
-    files() {
+    file() {
         return this.morphOne('Files', 'file');
     }
 }));
