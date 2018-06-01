@@ -1,4 +1,4 @@
-const Bookshelf = require('../../config/bookshelf');
+const Bookshelf = require('../config/bookshelf');
 const Promise = require('bluebird');
 const { Avatars } = require('./filesTypes')
 

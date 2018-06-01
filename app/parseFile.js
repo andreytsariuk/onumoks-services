@@ -5,12 +5,6 @@ const { getKeyWords } = require('./findWords');
 
 
 
-
-pdf2Text(filePath).then(function (pages) {
-  //pages is an array of string arrays 
-  //loosely corresponding to text objects within the pdf
-});
-
 function getTextAsync(filePath) {
 
   return pdf2Text(filePath).then(function (pages) {
@@ -23,7 +17,7 @@ function getTextAsync(filePath) {
 }
 
 
-function getTextFromPdf(fileName) {
+async function getTextFromPdf(filePath) {
   const fs = require('fs');
   const buffer = fs.readFileSync(filePath);
   //or parse a buffer of pdf data

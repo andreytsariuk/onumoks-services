@@ -30,7 +30,11 @@ class S3Service {
     return Promise.fromCallback(cb => this.s3.getObject(params, cb))
   }
 
-  getFile(params) {
+  getStream(params){
+    return this.s3.getObject(params);
+  }
+
+ async getFile(params) {
     return Promise.fromCallback(cb => this.s3.getSignedUrl('getObject', params, cb))
   }
 

@@ -1,4 +1,4 @@
-const Bookshelf = require('../../../config/bookshelf');
+const Bookshelf = require('../../config/bookshelf');
 const Knowledges = require('./Knowledges.model');
 const { Lectors } = require('../rolesTypes');
 
