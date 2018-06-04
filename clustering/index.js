@@ -1,6 +1,6 @@
 
 
-let knowleges = [
+let knowledges = [
   {
     id: 1,
     name: 'programming'
