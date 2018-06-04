@@ -32,6 +32,7 @@
     "pos-tokenizer": "^1.0.0",
     "randomcolor": "^0.5.3",
     "uwords": "0.0.5",
+    "word-extractor": "^0.1.4",
     "wordpos": "^1.1.6"
   }
 }
