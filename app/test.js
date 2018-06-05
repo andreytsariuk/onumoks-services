@@ -2,7 +2,7 @@ const { S3Service } = require('../services');
 const config = require('config');
 const testFolder = './src/';
 const fs = require('fs');
-
+const _ = require('lodash');
 
 
 function download(document) {
@@ -44,12 +44,7 @@ function download(document) {
 
 
 
-var WordExtractor = require("word-extractor");
-var extractor = new WordExtractor();
-var extracted = extractor.extract("./src/docs/test.doc");
-extracted.then(function (doc) {
-  console.log(doc.getBody());
-});
+
 
 
 // fs.readdir(testFolder, (err, files) => {
@@ -57,3 +52,7 @@ extracted.then(function (doc) {
 //     download(file);
 //   });
 // })
+
+
+console.log(_.difference([1, 2, 3, 4, 5, 6, 7, 8, 9], [1, 2, 3, 4, 5], ));
+console.log(_.difference([1, 2, 3, 4, 5], [1, 2, 3, 4, 5, 6, 7, 8, 9], ));

@@ -16,28 +16,28 @@ function download(document) {
   const fileDestination = document.get('name');
   // console.log('START',fileDestination)
   // const file = fs.createWriteStream(`./src/${fileDestination}`);
-  // if (!fs.existsSync(`./src/${fileDestination}`)) {
-  console.log('SDSD')
-  let file = fs.createWriteStream(`./src/${fileDestination}`);
+  if (!fs.existsSync(`./src/${fileDestination}`)) {
+    console.log('SDSD')
+    let file = fs.createWriteStream(`./src/${fileDestination}`);
 
-  return new Promise((resolve, reject) => {
-    S3Service.getStream({
-      Key: document.get('name'),
-      Bucket: config.get('AWS.S3.bucket')
-    }).createReadStream()
-      .on('end', () => {
-        console.log('REAL END', fileDestination)
-        file.close();
-        file.on('close', () => resolve())
+    return new Promise((resolve, reject) => {
+      S3Service.getStream({
+        Key: document.get('name'),
+        Bucket: config.get('AWS.S3.bucket')
+      }).createReadStream()
+        .on('end', () => {
+          console.log('REAL END', fileDestination)
+          file.close();
+          file.on('close', () => resolve())
 
-      })
-      .on('error', (error) => {
-        // console.log('REAL END',fileDestination)
-        console.log('f000')
-        //  return reject(error);
-      }).pipe(file);
-  });
-  // }
+        })
+        .on('error', (error) => {
+          // console.log('REAL END',fileDestination)
+          console.log('f000')
+          //  return reject(error);
+        }).pipe(file);
+    });
+  }
   return Promise.resolve();
 }
 
@@ -57,7 +57,7 @@ async function parseRemoteFile(document, keywords) {
   await Promise.map(foundKeywords, keyword => {
     let foundKeyWord = keywords.find(word => word.get('name') === keyword);
     if (foundKeyWord) {
-      if (!foundKeyWord.get('hidden')) {
+      if (foundKeyWord && !foundKeyWord.get('hidden')) {
         outerKeyWords.push(foundKeyWord);
         return Promise.resolve();
       } else
@@ -70,7 +70,8 @@ async function parseRemoteFile(document, keywords) {
         .save()
         .then(newKeyWord => outerKeyWords.push(foundKeyWord))
         .catch(err => console.log(err.code));
-  });
+  })
+    .catch(() => console.log('FOOOO'));
   return outerKeyWords;
 }
 
@@ -87,7 +88,7 @@ async function Clustering() {
     new Clusters().fetchAll(),
     new Keywords().fetchAll(),
     new Knowledges().fetchAll(),
-    new FilesType.Articles().orderBy('id').fetchAll({ withRelated: ['file', 'file'] })
+    new FilesType.Articles().orderBy('id', 'asc').fetchAll({ withRelated: ['file', 'file'] })
   ]);
 
   let new_clusters = [];
@@ -95,7 +96,7 @@ async function Clustering() {
   let centroids = [];
   console.log('Docs', _.map(documents.toJSON(), 'id'))
 
-  //await Promise.each(documents.models, model => download(model));
+  await Promise.each(documents.models, model => download(model));
 
   let matrix = [];
   await Promise
@@ -106,7 +107,6 @@ async function Clustering() {
       let afterMe = false;
       await Promise
         .each(documents.models, async (document2, index2) => {
-          console.log('index2', index2)
           if (document2.id === document.id) {
             afterMe = true
             return Promise.resolve();
@@ -120,9 +120,14 @@ async function Clustering() {
 
           let keywords2 = await parseRemoteFile(document2, GlobalKeywords);
 
-          let difference2 = keywords.length > keywords2.length ?
-            100 - _.difference(keywords2.map(key => key.get('name')), keywords.map(key => key.get('name'))).length / keywords.length * 100 :
-            100 - _.difference(keywords.map(key => key.get('name')), keywords2.map(key => key.get('name'))).length / keywords2.length * 100;
+          let keywords_1 = keywords.map(key => key.get('name'));
+          let keywords_2 = keywords2.map(key => key.get('name'));
+
+          let difference2 = keywords_1.length > keywords_2.length ?
+            keywords_1.length - _.difference(keywords_1, keywords_2).length :
+            keywords_2.length - _.difference(keywords_2, keywords_1).length;
+
+
           console.log(document2.id, ' ', difference2);
 
 
@@ -139,6 +144,7 @@ async function Clustering() {
 
 
   function rec(steps = [], used = []) {
+
     let [{ id, min }] = _.reverse(steps);
     let index = 0;
     let newMin = _.minBy(matrix[id], el => {
@@ -149,6 +155,7 @@ async function Clustering() {
       index++;
       return out;
     });
+    console.log('newMin', newMin)
 
     let minIndex = _.findIndex(matrix[id], el => el === newMin);
 
@@ -156,10 +163,8 @@ async function Clustering() {
       min: newMin,
       id: minIndex
     });
-    let duplicate = _.filter(_.map(steps, 'id'), function (value, index, iteratee) {
-      return _.includes(iteratee, value, index + 1);
-    });
-    if (duplicate.length) {
+
+    if (_.find(_.map(steps, 'id'), el => el === minIndex)) {
       return {
         min: newMin,
         id: minIndex,
