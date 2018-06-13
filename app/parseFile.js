@@ -29,7 +29,7 @@ async function getTextFromPdf(filePath) {
   return new Promise((resolve, reject) => {
     let extracted = extractor.extract(filePath);
     extracted.then(function (doc) {
-      console.log();
+
       resolve(doc.getBody());
     });
   });

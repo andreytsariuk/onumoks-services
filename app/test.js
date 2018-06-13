@@ -54,5 +54,5 @@ function download(document) {
 // })
 
 
-console.log(_.difference([1, 2, 3, 4, 5, 6, 7, 8, 9], [1, 2, 3, 4, 5], ));
-console.log(_.difference([1, 2, 3, 4, 5], [1, 2, 3, 4, 5, 6, 7, 8, 9], ));
+console.log(_.intersectionWith([1, 2, 3, 4, 5, 6, 7, 8, 9], [1, 2, 3, 4, 5], _.isEqual));
+console.log(_.intersectionWith([1, 2, 3, 4, 5], [1, 2, 3, 4, 5, 6, 7, 8, 9], _.isEqual));

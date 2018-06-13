@@ -9,7 +9,7 @@ const fs = require('fs');
 const randomColor = require('randomcolor');
 const path = require('path');
 const config = require('config');
-
+const Bookshelf = require('../config/bookshelf');
 //TEsts
 
 function download(document) {
@@ -57,19 +57,31 @@ async function parseRemoteFile(document, keywords) {
   await Promise.map(foundKeywords, keyword => {
     let foundKeyWord = keywords.find(word => word.get('name') === keyword);
     if (foundKeyWord) {
-      if (foundKeyWord && !foundKeyWord.get('hidden')) {
+      if (!foundKeyWord.get('hidden')) {
         outerKeyWords.push(foundKeyWord);
         return Promise.resolve();
       } else
         return Promise.resolve();
     }
     else
-      return new Keywords({
-        name: keyword
+      return Bookshelf.transaction(function (t) {
+        return new Keywords({ name: keyword })
+          .fetchAll({ require: true, transacting: t })
+          .then(res => {
+            if (res.models.length) {
+              return res.models[0];
+            } else
+              throw new Error('keyword_not_found');
+          })
+          .catch(new Keywords({
+            name: keyword
+          })
+            .save())
+          .then(newKeyWord => outerKeyWords.push(newKeyWord))
+          .catch(err => console.log(err.code));
       })
-        .save()
-        .then(newKeyWord => outerKeyWords.push(foundKeyWord))
-        .catch(err => console.log(err.code));
+
+
   })
     .catch(() => console.log('FOOOO'));
   return outerKeyWords;
@@ -78,277 +90,212 @@ async function parseRemoteFile(document, keywords) {
 
 
 async function Clustering() {
+  try {
+    let [
+      clusters,
+      GlobalKeywords,
+      knowledges,
+      documents
+    ] = await Promise.all([
+      new Clusters().fetchAll(),
+      new Keywords().fetchAll(),
+      new Knowledges().fetchAll(),
+      new FilesType.Articles().orderBy('id', 'asc').fetchAll({ withRelated: ['file'] })
+    ]);
 
-  let [
-    clusters,
-    GlobalKeywords,
-    knowledges,
-    documents
-  ] = await Promise.all([
-    new Clusters().fetchAll(),
-    new Keywords().fetchAll(),
-    new Knowledges().fetchAll(),
-    new FilesType.Articles().orderBy('id', 'asc').fetchAll({ withRelated: ['file', 'file'] })
-  ]);
+    let new_clusters = [];
+    let usedDocs = [];
+    let centroids = [];
+    console.log('Docs', _.map(documents.toJSON(), 'id'))
 
-  let new_clusters = [];
-  let usedDocs = [];
-  let centroids = [];
-  console.log('Docs', _.map(documents.toJSON(), 'id'))
+    await Promise.each(documents.models, model => download(model));
 
-  await Promise.each(documents.models, model => download(model));
+    let matrix = [];
+    await Promise
+      .each(documents.models, async (document) => {
+        let keywords = await parseRemoteFile(document, GlobalKeywords);
+        let afterMe = false;
+        await Promise
+          .each(documents.models, async (document2, index2) => {
+            if (document2.id === document.id)
+              return Promise.resolve();
 
-  let matrix = [];
-  await Promise
-    .each(documents.models, async (document) => {
-      console.log('1 step', document.id)
-      let keywords = await parseRemoteFile(document, GlobalKeywords);
-      console.log('sdsd', _.map(usedDocs, 'document.id'))
-      let afterMe = false;
-      await Promise
-        .each(documents.models, async (document2, index2) => {
-          if (document2.id === document.id) {
-            afterMe = true
+            let keywords2 = await parseRemoteFile(document2, GlobalKeywords);
+
+            let keywords_1 = keywords.map(key => key.get('name'));
+            let keywords_2 = keywords2.map(key => key.get('name'));
+            let intersection = _.intersectionWith(keywords_1, keywords_2, _.isEqual).length;
+
+            console.log(`[${document.id}][${document2.id}]`, intersection);
+            matrix.push({
+              document1: document,
+              document2,
+              intersection,
+            })
             return Promise.resolve();
-          }
-          if (document2.id !== document.id && !afterMe)
-            return Promise.resolve();
-          if (matrix[document2.id] && matrix[document2.id][document.id])
-            return Promise.resolve();
-          matrix[document.id] = matrix[document.id] ? matrix[document.id] : [];
-          matrix[document2.id] = matrix[document2.id] ? matrix[document2.id] : [];
-
-          let keywords2 = await parseRemoteFile(document2, GlobalKeywords);
-
-          let keywords_1 = keywords.map(key => key.get('name'));
-          let keywords_2 = keywords2.map(key => key.get('name'));
-
-          let difference2 = keywords_1.length > keywords_2.length ?
-            keywords_1.length - _.difference(keywords_1, keywords_2).length :
-            keywords_2.length - _.difference(keywords_2, keywords_1).length;
-
-
-          console.log(document2.id, ' ', difference2);
-
-
-          matrix[document.id][document2.id] = difference2;
-          matrix[document2.id][document.id] = difference2;
-
-          return Promise.resolve();
-        });
-      return Promise.resolve();
-
-    });
-
-  console.log('matrix', matrix)
-
-
-  function rec(steps = [], used = []) {
-
-    let [{ id, min }] = _.reverse(steps);
-    let index = 0;
-    let newMin = _.minBy(matrix[id], el => {
-      // console.log('used', used);
-      // console.log('index', index);
-      // console.log('used.indexOf(index)', used.indexOf(index))
-      let out = el !== min && used.indexOf(index) === -1 && index !== id ? el : 99999;
-      index++;
-      return out;
-    });
-    console.log('newMin', newMin)
-
-    let minIndex = _.findIndex(matrix[id], el => el === newMin);
-
-    steps.push({
-      min: newMin,
-      id: minIndex
-    });
-
-    if (_.find(_.map(steps, 'id'), el => el === minIndex)) {
-      return {
-        min: newMin,
-        id: minIndex,
-        max: _.max(_.compact(_.map(steps, 'min')))
-      }
-    } else
-      return rec(steps, used);
-  }
-
-
-  function getChilds(centroid, used) {
-    let childs = [];
-    _.forEach(matrix[centroid.id], (el, index) => {
-      if (el && el <= centroid.max && used.indexOf(index) === -1) {
-        childs.push({
-          id: index
-        })
-      }
-    });
-    return childs;
-  }
-  let used = [];
-  _.forEach(documents.models, doc => {
-    if (used.length === documents.toJSON().length)
-      return;
-    let centroid = rec([{ id: doc.id }], used);
-    let childs = getChilds(centroid, used);
-    used = [...used, ...[centroid.id], ..._.map(childs, 'id')]
-    console.log('centroid', centroid)
-    console.log('childs', childs);
-
-
-  })
-
-  process.exit(0);
-
-
-  await Promise
-    .each(documents.models, async (document) => {
-      if (_.map(usedDocs, 'document').length === documents.models.length)
+          });
         return Promise.resolve();
 
-      console.log('1 step', document.id)
-      let keywords = await parseRemoteFile(document, GlobalKeywords);
-      let centroid = await findCentroid([{
-        document,
-        keywords
-      }], usedDocs, documents, GlobalKeywords);
-      console.log('centroid', centroid.document.id)
-
-      console.log('centroid', centroid.max)
-
-      let clusterChildren = await findClusterChildren(centroid, documents, GlobalKeywords);
-      new_clusters.push({
-        centroid,
-        clusterChildren
       });
-      console.log('clusterChildren', _.map(clusterChildren, 'document.id'))
-      usedDocs = [...usedDocs, ...clusterChildren, ...[centroid]];
-      return Promise.resolve();
-    });
 
-  return await Promise
-    .map(new_clusters, cluster => {
-      console.log('cluster.centroid.document.id', cluster.centroid.document.id)
-      return new Clusters({
-        centroid: cluster.centroid.document.id,
-        workspace_id: cluster.centroid.document.related('file').get('workspace_id'),
-        difference: cluster.centroid.max ? cluster.centroid.max : 50,
-        color: randomColor({
-          count: 10,
-          hue: 'green'
-        })
+    //console.log('matrix', matrix)
+
+
+    let distances = [];
+
+    _.forEach(documents.models, document => {
+      let sumDistance = _.reduce(matrix, (sum, el) => sum += el.document1.id === document.id ? el.intersection : 0, 0);
+      distances.push({
+        document,
+        sumDistance
       })
-        .save()
-        .then(newCluster => {
-          console.log('newCluster', cluster.centroid.document.id)
-          console.log('cluster.clusterChildren', _.map(cluster.clusterChildren, 'document.id'))
-          console.log('MAx', cluster.centroid.max)
+    });
 
 
-          return Promise
-            .map(cluster.clusterChildren, child => child.document
-              .save({
-                cluster_id: newCluster.id
-              }))
-        }
-        )
-        .then(() => Promise
-          .map(clusters.models, model => model.destroy())
-        )
+    let used = [];
+    let newClusters = [];
+    let newClusters_view = [];
+    while (used.length < documents.models.length) {
+      let max = _.maxBy(_.filter(distances, el => used.indexOf(el.document.id) === -1), el => el.sumDistance);
+      let dist = max.sumDistance / documents.models.length;
+      let children = _.filter(matrix, el => el.document1.id === max.document.id && el.intersection >= dist && used.indexOf(el.document2.id) === -1);
+
+      used = [...used, ...[max.document.id], ..._.map(children, 'document2.id')];
+
+      newClusters.push({
+        centroid: max,
+        difference: dist,
+        children: children
+      });
+      newClusters_view.push({
+        centroid: max.document.related('file').get('title'),
+        difference: dist,
+        children: children.map(ch => ch.document2.related('file').get('title'))
+      });
     }
-    );
 
-}
+    console.log('newClusters', newClusters_view);
 
+    // process.exit(0);
 
+    return await Promise
+      .map(newClusters, cluster => {
+        console.log('cluster.centroid.document.id', cluster.centroid.document.id)
+        return new Clusters({
+          centroid: cluster.centroid.document.id,
+          workspace_id: cluster.centroid.document.related('file').get('workspace_id'),
+          difference: cluster.difference,
+          color: randomColor({
+            count: 10,
+            hue: 'green'
+          })
+        })
+          .save()
+          .then(newCluster => {
+            console.log('newCluster', cluster.centroid.document.id)
+            console.log('MAx', cluster.difference)
+            return Promise
+              .map(cluster.children, child => child.document2
+                .save({
+                  cluster_id: newCluster.id
+                }));
+          });
+      });
 
-
-async function findCentroid(steps, usedDocs, documents, GlobalKeywords) {
-  console.log('sdsd', _.map(usedDocs, 'document.id'))
-  let [{ document, keywords, difference }] = _.reverse(steps);
-  let centroid = {};
-  await Promise
-    .each(documents.models, async (document2) => {
-      if (!document || document2.id === document.id || _.map(usedDocs, 'document.id').indexOf(document2.id) !== -1) {
-        console.log('FOOO')
-        return Promise.resolve();
-      }
-
-      let keywords2 = await parseRemoteFile(document2, GlobalKeywords);
-
-      let difference2 = keywords.length > keywords2.length ?
-        100 - _.difference(keywords2.map(key => key.get('name')), keywords.map(key => key.get('name'))).length / keywords.length * 100 :
-        100 - _.difference(keywords.map(key => key.get('name')), keywords2.map(key => key.get('name'))).length / keywords2.length * 100;
-      console.log(document.id, ' ', difference2);
-      console.log(document2.id, ' ', difference2);
-      if (difference === difference2) {
-        console.log('FOOO2')
-        return Promise.resolve();
-      }
-
-
-      if (!centroid.difference) {
-        centroid = {
-          document: document2,
-          keywords: keywords2,
-          difference: difference2
-        };
-      } else if (centroid.difference && centroid.difference > difference2)
-        centroid = {
-          document: document2,
-          keywords: keywords2,
-          difference: difference2
-        };
-      return Promise.resolve();
-    });
-  steps.push(centroid);
-  console.log('findCentroid', centroid.difference);
-  centroid = centroid.id ? centroid : steps[0];
-
-  let duplicate = _.filter(_.map(steps, 'document.id'), function (value, index, iteratee) {
-    return _.includes(iteratee, value, index + 1);
-  });
-  console.log('duplicate', duplicate)
-  if (duplicate.length) {
-    //  console.log('steps',_.map(steps,'difference'))
-    return ({
-      ...centroid,
-      max: _.maxBy(steps, (step) => step.difference).difference
-    });
+  } catch (error) {
+    console.log(error)
   }
-  else {
 
-    return await findCentroid(steps, usedDocs, documents, GlobalKeywords);
-  }
 }
 
 
-async function findClusterChildren(centroid, documents, GlobalKeywords) {
-  let { document, keywords } = centroid;
-  let children = [];
-  await Promise
-    .each(documents.models, async (document2) => {
-      if (document2.id === document.id) return Promise.resolve();
 
-      let keywords2 = await parseRemoteFile(document2, GlobalKeywords);
 
-      let difference = keywords.length > keywords2.length ?
-        100 - _.difference(keywords2.map(key => key.get('name')), keywords.map(key => key.get('name'))).length / keywords.length * 100 :
-        100 - _.difference(keywords.map(key => key.get('name')), keywords2.map(key => key.get('name'))).length / keywords2.length * 100;
+// async function findCentroid(steps, usedDocs, documents, GlobalKeywords) {
+//   console.log('sdsd', _.map(usedDocs, 'document.id'))
+//   let [{ document, keywords, difference }] = _.reverse(steps);
+//   let centroid = {};
+//   await Promise
+//     .each(documents.models, async (document2) => {
+//       if (!document || document2.id === document.id || _.map(usedDocs, 'document.id').indexOf(document2.id) !== -1) {
+//         console.log('FOOO')
+//         return Promise.resolve();
+//       }
 
-      if (centroid.max > difference) {
-        console.log('new Child', document2.id)
-        children.push({
-          document: document2,
-          keywords: keywords2,
-          difference
-        });
-      }
-      return Promise.resolve();
-    });
-  return children;
-}
+//       let keywords2 = await parseRemoteFile(document2, GlobalKeywords);
+
+//       let difference2 = keywords.length > keywords2.length ?
+//         100 - _.difference(keywords2.map(key => key.get('name')), keywords.map(key => key.get('name'))).length / keywords.length * 100 :
+//         100 - _.difference(keywords.map(key => key.get('name')), keywords2.map(key => key.get('name'))).length / keywords2.length * 100;
+//       console.log(document.id, ' ', difference2);
+//       console.log(document2.id, ' ', difference2);
+//       if (difference === difference2) {
+//         console.log('FOOO2')
+//         return Promise.resolve();
+//       }
+
+
+//       if (!centroid.difference) {
+//         centroid = {
+//           document: document2,
+//           keywords: keywords2,
+//           difference: difference2
+//         };
+//       } else if (centroid.difference && centroid.difference > difference2)
+//         centroid = {
+//           document: document2,
+//           keywords: keywords2,
+//           difference: difference2
+//         };
+//       return Promise.resolve();
+//     });
+//   steps.push(centroid);
+//   console.log('findCentroid', centroid.difference);
+//   centroid = centroid.id ? centroid : steps[0];
+
+//   let duplicate = _.filter(_.map(steps, 'document.id'), function (value, index, iteratee) {
+//     return _.includes(iteratee, value, index + 1);
+//   });
+//   console.log('duplicate', duplicate)
+//   if (duplicate.length) {
+//     //  console.log('steps',_.map(steps,'difference'))
+//     return ({
+//       ...centroid,
+//       max: _.maxBy(steps, (step) => step.difference).difference
+//     });
+//   }
+//   else {
+
+//     return await findCentroid(steps, usedDocs, documents, GlobalKeywords);
+//   }
+// }
+
+
+// async function findClusterChildren(centroid, documents, GlobalKeywords) {
+//   let { document, keywords } = centroid;
+//   let children = [];
+//   await Promise
+//     .each(documents.models, async (document2) => {
+//       if (document2.id === document.id) return Promise.resolve();
+
+//       let keywords2 = await parseRemoteFile(document2, GlobalKeywords);
+
+//       let difference = keywords.length > keywords2.length ?
+//         100 - _.difference(keywords2.map(key => key.get('name')), keywords.map(key => key.get('name'))).length / keywords.length * 100 :
+//         100 - _.difference(keywords.map(key => key.get('name')), keywords2.map(key => key.get('name'))).length / keywords2.length * 100;
+
+//       if (centroid.max > difference) {
+//         console.log('new Child', document2.id)
+//         children.push({
+//           document: document2,
+//           keywords: keywords2,
+//           difference
+//         });
+//       }
+//       return Promise.resolve();
+//     });
+//   return children;
+// }
 
 
 
@@ -359,3 +306,26 @@ async function findClusterChildren(centroid, documents, GlobalKeywords) {
 
 
 Clustering();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
